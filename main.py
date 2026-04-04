@@ -102,7 +102,7 @@ def verify_webhook(x_webhook_secret: str = Header(None)):
 async def index(request: Request):
     with get_db() as db:
         episodes = db.execute(
-            "SELECT * FROM episodes WHERE published=1 ORDER BY date DESC LIMIT 20"
+            "SELECT * FROM episodes WHERE published=1 ORDER BY episode_num DESC LIMIT 20"
         ).fetchall()
         latest = episodes[0] if episodes else None
         shownotes = json.loads(latest["shownotes"]) if latest and latest["shownotes"] else {}
@@ -173,6 +173,17 @@ async def publish_episode(payload: PublishPayload, _=Depends(verify_webhook)):
                 )
 
     return {"status": "published", "slug": slug, "url": f"/episode/{slug}"}
+
+
+@app.delete("/webhook/episode/{slug}")
+async def delete_episode(slug: str, _=Depends(verify_webhook)):
+    with get_db() as db:
+        ep = db.execute("SELECT id FROM episodes WHERE slug=?", (slug,)).fetchone()
+        if not ep:
+            raise HTTPException(status_code=404, detail="Episode not found")
+        db.execute("DELETE FROM research_context WHERE episode_id=?", (ep["id"],))
+        db.execute("DELETE FROM episodes WHERE slug=?", (slug,))
+    return {"status": "deleted", "slug": slug}
 
 
 @app.post("/api/chat")
