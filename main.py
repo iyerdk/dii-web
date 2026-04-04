@@ -106,8 +106,7 @@ async def index(request: Request):
         ).fetchall()
         latest = episodes[0] if episodes else None
         shownotes = json.loads(latest["shownotes"]) if latest and latest["shownotes"] else {}
-    return templates.TemplateResponse("index.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "index.html", {
         "latest": latest,
         "shownotes": shownotes,
         "archive": episodes[1:] if episodes else [],
@@ -129,8 +128,7 @@ async def episode(request: Request, slug: str):
         archive = db.execute(
             "SELECT slug, title, date FROM episodes WHERE published=1 ORDER BY date DESC LIMIT 20"
         ).fetchall()
-    return templates.TemplateResponse("episode.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "episode.html", {
         "ep": ep,
         "shownotes": shownotes,
         "topics": topics,
