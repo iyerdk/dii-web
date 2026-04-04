@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{{ ep.title }} — DII{% endblock %}
+
+{% block content %}
+<div class="layout">
+  <article class="main-content">
+    <div class="episode-header">
+      <div class="episode-meta">
+        <a href="/" class="back-link">&larr; All editions</a>
+        <span class="episode-num">Episode {{ ep.episode_num }}</span>
+        <span class="episode-date">{{ ep.date }}</span>
+      </div>
+      <h1 class="episode-title">{{ ep.title }}</h1>
+      {% if ep.subtitle %}
+        <p class="episode-subtitle">{{ ep.subtitle }}</p>
+      {% endif %}
+    </div>
+
+    {% if ep.mp3_url %}
+    <div class="audio-player">
+      <audio controls preload="metadata">
+        <source src="{{ ep.mp3_url }}" type="audio/mpeg">
+      </audio>
+      <span class="audio-label">Listen &mdash; {{ shownotes.get('title', ep.title) }}</span>
+    </div>
+    {% endif %}
+
+    {% if ep.summary %}
+    <div class="episode-summary">
+      <p>{{ ep.summary }}</p>
+    </div>
+    {% endif %}
+
+    {% if shownotes.takeaways %}
+    <div class="takeaways">
+      <h2>Key Takeaways</h2>
+      <ul>
+        {% for item in shownotes.takeaways %}
+          <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if topics %}
+    <div class="research-sections">
+      <h2>Research Deep Dives</h2>
+      {% for topic in topics %}
+      <section class="research-card" data-slug="{{ ep.slug }}">
+        <h3 class="research-topic">{{ topic.topic }}</h3>
+        <div class="research-content">{{ topic.content }}</div>
+        <button class="ask-btn" onclick="openChat(this, '{{ topic.content | replace("'", "\\'") | replace('\n', ' ') | truncate(500) }}')">
+          Ask deeper &nearr;
+        </button>
+        <div class="chat-panel hidden">
+          <div class="chat-messages"></div>
+          <div class="chat-input-row">
+            <input type="text" class="chat-input" placeholder="Ask a follow-up question…">
+            <button class="chat-send" onclick="sendChat(this)">Send</button>
+          </div>
+        </div>
+      </section>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if ep.content_md %}
+    <div class="script-section">
+      <h2>Full Transcript</h2>
+      <div class="script-content">
+        {{ ep.content_md | replace('**MAYA:**', '<strong class="speaker maya">MAYA</strong>') | replace('**JAMES:**', '<strong class="speaker james">JAMES</strong>') | safe }}
+      </div>
+    </div>
+    {% endif %}
+  </article>
+
+  <aside class="sidebar">
+    <h3>Archive</h3>
+    <nav class="archive-list">
+      {% for a in archive %}
+        <a href="/episode/{{ a.slug }}" class="archive-item {% if a.slug == ep.slug %}active{% endif %}">
+          <span class="archive-title">{{ a.title }}</span>
+          <span class="archive-date">{{ a.date }}</span>
+        </a>
+      {% endfor %}
+    </nav>
+  </aside>
+</div>
+{% endblock %}

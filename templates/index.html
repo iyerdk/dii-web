@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}DII — Latest Briefing{% endblock %}
+
+{% block content %}
+<div class="layout">
+  <article class="main-content">
+    {% if latest %}
+      <div class="episode-header">
+        <div class="episode-meta">
+          <span class="episode-num">Episode {{ latest.episode_num }}</span>
+          <span class="episode-date">{{ latest.date }}</span>
+        </div>
+        <h1 class="episode-title">{{ latest.title }}</h1>
+        {% if latest.subtitle %}
+          <p class="episode-subtitle">{{ latest.subtitle }}</p>
+        {% endif %}
+      </div>
+
+      {% if latest.mp3_url %}
+      <div class="audio-player">
+        <audio controls preload="metadata">
+          <source src="{{ latest.mp3_url }}" type="audio/mpeg">
+        </audio>
+        <span class="audio-label">Listen to this week's briefing</span>
+      </div>
+      {% endif %}
+
+      {% if latest.summary %}
+      <div class="episode-summary">
+        <p>{{ latest.summary }}</p>
+      </div>
+      {% endif %}
+
+      {% if shownotes.takeaways %}
+      <div class="takeaways">
+        <h2>This Week's Takeaways</h2>
+        <ul>
+          {% for item in shownotes.takeaways %}
+            <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <div class="read-more">
+        <a href="/episode/{{ latest.slug }}" class="btn-primary">Read Full Briefing &rarr;</a>
+      </div>
+
+    {% else %}
+      <div class="empty-state">
+        <h2>First edition coming soon.</h2>
+        <p>Digital Infrastructure Insider publishes every Saturday morning.</p>
+      </div>
+    {% endif %}
+  </article>
+
+  <aside class="sidebar">
+    <h3>Archive</h3>
+    {% if archive %}
+      <nav class="archive-list">
+        {% for ep in archive %}
+          <a href="/episode/{{ ep.slug }}" class="archive-item">
+            <span class="archive-title">{{ ep.title }}</span>
+            <span class="archive-date">{{ ep.date }}</span>
+          </a>
+        {% endfor %}
+      </nav>
+    {% else %}
+      <p class="muted">Previous editions will appear here.</p>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}
