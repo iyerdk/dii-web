@@ -29,6 +29,7 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 app = FastAPI(title="Digital Infrastructure Insider")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+templates.env.filters["from_json"] = json.loads
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ def init_db():
                 episode_id  INTEGER NOT NULL,
                 topic       TEXT NOT NULL,
                 content     TEXT NOT NULL,
+                bullets     TEXT,       -- newline-separated bullet points
                 sources     TEXT,       -- JSON array of URLs
                 FOREIGN KEY (episode_id) REFERENCES episodes(id)
             );
@@ -167,9 +169,12 @@ async def publish_episode(payload: PublishPayload, _=Depends(verify_webhook)):
         if payload.research_topics:
             db.execute("DELETE FROM research_context WHERE episode_id=?", (ep_id,))
             for t in payload.research_topics:
+                bullets = t.get("bullets")
+                if isinstance(bullets, list):
+                    bullets = "\n".join(bullets)
                 db.execute(
-                    "INSERT INTO research_context (episode_id, topic, content, sources) VALUES (?,?,?,?)",
-                    (ep_id, t.get("topic"), t.get("content"), json.dumps(t.get("sources", [])))
+                    "INSERT INTO research_context (episode_id, topic, content, bullets, sources) VALUES (?,?,?,?,?)",
+                    (ep_id, t.get("topic"), t.get("content"), bullets, json.dumps(t.get("sources", [])))
                 )
 
     return {"status": "published", "slug": slug, "url": f"/episode/{slug}"}

@@ -1,3 +1,15 @@
+// ── Card expand/collapse ──────────────────────────────────────────────────────
+
+function toggleCard(headerBtn) {
+  const card = headerBtn.closest('.research-card');
+  const body = card.querySelector('.card-body');
+  const expanded = headerBtn.getAttribute('aria-expanded') === 'true';
+
+  headerBtn.setAttribute('aria-expanded', !expanded);
+  body.classList.toggle('hidden', expanded);
+  card.classList.toggle('expanded', !expanded);
+}
+
 // ── Chat panel ────────────────────────────────────────────────────────────────
 
 function openChat(btn, sectionContext) {
@@ -6,7 +18,6 @@ function openChat(btn, sectionContext) {
   panel.classList.toggle('hidden');
   if (!panel.classList.contains('hidden')) {
     panel.querySelector('.chat-input').focus();
-    // Store context on the panel for use in sendChat
     panel.dataset.context = sectionContext;
     panel.dataset.slug = card.dataset.slug;
   }

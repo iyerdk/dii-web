@@ -46,17 +46,51 @@
     <div class="research-sections">
       <h2>Research Deep Dives</h2>
       {% for topic in topics %}
+      {% set topic_sources = topic.sources | default('[]') %}
       <section class="research-card" data-slug="{{ ep.slug }}">
-        <h3 class="research-topic">{{ topic.topic }}</h3>
-        <div class="research-content">{{ topic.content }}</div>
-        <button class="ask-btn" onclick="openChat(this, '{{ topic.content | replace("'", "\\'") | replace('\n', ' ') | truncate(500) }}')">
-          Ask deeper &nearr;
+        <button class="card-header" onclick="toggleCard(this)" aria-expanded="false">
+          <span class="card-title">{{ topic.topic }}</span>
+          <span class="card-chevron">&#8250;</span>
         </button>
-        <div class="chat-panel hidden">
-          <div class="chat-messages"></div>
-          <div class="chat-input-row">
-            <input type="text" class="chat-input" placeholder="Ask a follow-up question…">
-            <button class="chat-send" onclick="sendChat(this)">Send</button>
+
+        <div class="card-body hidden">
+          {% set bullets_raw = topic.bullets | default('') %}
+          {% if bullets_raw %}
+          <ul class="topic-bullets">
+            {% for b in bullets_raw.split('\n') %}{% if b.strip() %}
+            <li>{{ b.strip().lstrip('•-').strip() }}</li>
+            {% endif %}{% endfor %}
+          </ul>
+          {% endif %}
+
+          <div class="topic-full-content">{{ topic.content }}</div>
+
+          {% if topic_sources and topic_sources != '[]' %}
+          <div class="topic-sources">
+            <span class="sources-label">Sources</span>
+            <ul class="sources-list">
+              {% for url in topic_sources | from_json %}
+              <li><a href="{{ url }}" target="_blank" rel="noopener">{{ url | truncate(60, True, '…') }}</a></li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+
+          <div class="card-actions">
+            <button class="ask-btn" onclick="openChat(this, '{{ topic.content | replace("'", "\\'") | replace('\n', ' ') | truncate(500) }}')">
+              Ask deeper &nearr;
+            </button>
+            <button class="collapse-btn" onclick="toggleCard(this.closest('.research-card').querySelector('.card-header'))">
+              Collapse &and;
+            </button>
+          </div>
+
+          <div class="chat-panel hidden">
+            <div class="chat-messages"></div>
+            <div class="chat-input-row">
+              <input type="text" class="chat-input" placeholder="Ask a follow-up question…">
+              <button class="chat-send" onclick="sendChat(this)">Send</button>
+            </div>
           </div>
         </div>
       </section>
