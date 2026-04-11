@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Optional
 
 import anthropic
+import resend
 from fastapi import Depends, FastAPI, HTTPException, Request, Header
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -25,6 +26,9 @@ from pydantic import BaseModel
 DB_PATH = os.environ.get("DB_PATH", "dii.db")
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "change-me-in-production")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+EMAIL_TO = os.environ.get("EMAIL_TO", "")           # recipient address
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "DII Briefing <briefing@dii.news>")
 
 app = FastAPI(title="Digital Infrastructure Insider")
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -238,6 +242,58 @@ If the question goes beyond the week's research, say so and share what you do kn
         messages=[{"role": "user", "content": req.question}],
     )
     return {"answer": response.content[0].text}
+
+
+@app.post("/webhook/send-email")
+async def send_email(_=Depends(verify_webhook)):
+    if not RESEND_API_KEY:
+        raise HTTPException(status_code=503, detail="RESEND_API_KEY not configured")
+    if not EMAIL_TO:
+        raise HTTPException(status_code=503, detail="EMAIL_TO not configured")
+
+    # Fetch the latest published episode with its research topics
+    with get_db() as db:
+        ep = db.execute(
+            "SELECT * FROM episodes WHERE published=1 ORDER BY episode_num DESC LIMIT 1"
+        ).fetchone()
+        if not ep:
+            raise HTTPException(status_code=404, detail="No published episodes")
+        topics = db.execute(
+            "SELECT * FROM research_context WHERE episode_id=?", (ep["id"],)
+        ).fetchall()
+        shownotes = json.loads(ep["shownotes"]) if ep["shownotes"] else {}
+
+    # Build topic dicts for template
+    topic_list = []
+    for t in topics:
+        bullets = (t["bullets"] or "").strip().split("\n")
+        bullets = [b.strip().lstrip("•-").strip() for b in bullets if b.strip()]
+        sources = json.loads(t["sources"] or "[]")
+        topic_list.append({
+            "topic": t["topic"],
+            "bullets": bullets,
+            "content": t["content"] or "",
+            "sources": sources,
+        })
+
+    web_url = f"https://agile-hope-production.up.railway.app/episode/{ep['slug']}"
+
+    html = templates.get_template("email_briefing.html").render(
+        ep=ep,
+        shownotes=shownotes,
+        topics=topic_list,
+        web_url=web_url,
+    )
+
+    resend.api_key = RESEND_API_KEY
+    result = resend.Emails.send({
+        "from": EMAIL_FROM,
+        "to": [EMAIL_TO],
+        "subject": f"DII Briefing — EP{ep['episode_num']}: {ep['title']}",
+        "html": html,
+    })
+
+    return {"status": "sent", "email_id": result.get("id"), "episode": ep["slug"]}
 
 
 @app.get("/health")

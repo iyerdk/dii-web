@@ -16,14 +16,24 @@
       {% endif %}
     </div>
 
-    {% if ep.mp3_url %}
     <div class="audio-player">
-      <audio controls preload="metadata">
+      {% if ep.mp3_url %}
+      <audio controls preload="metadata" id="episode-audio">
         <source src="{{ ep.mp3_url }}" type="audio/mpeg">
       </audio>
-      <span class="audio-label">Listen &mdash; {{ shownotes.get('title', ep.title) }}</span>
+      {% else %}
+      <button class="tts-btn" id="tts-btn" onclick="toggleTTS()" title="Listen to podcast script">
+        <span class="tts-icon">&#9654;</span>
+        <span class="tts-label">Listen</span>
+      </button>
+      <div class="tts-controls hidden" id="tts-controls">
+        <button class="tts-action" onclick="pauseTTS()" title="Pause">&#10074;&#10074;</button>
+        <button class="tts-action" onclick="stopTTS()" title="Stop">&#9646;&#9646;</button>
+        <span class="tts-status" id="tts-status">Reading…</span>
+      </div>
+      {% endif %}
+      <span class="audio-label no-print">{{ shownotes.get('subtitle', ep.subtitle or '') }}</span>
     </div>
-    {% endif %}
 
     {% if ep.summary %}
     <div class="episode-summary">

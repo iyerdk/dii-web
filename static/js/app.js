@@ -1,3 +1,88 @@
+// ── Text-to-Speech (browser Web Speech API) ───────────────────────────────────
+
+let ttsUtterance = null;
+let ttsSpeaking = false;
+
+function buildTTSText() {
+  // Extract the full script content, splitting MAYA/JAMES lines
+  const scriptEl = document.querySelector('.script-content');
+  if (!scriptEl) return '';
+  // Get text, preserving paragraph breaks
+  return scriptEl.innerText || scriptEl.textContent || '';
+}
+
+function toggleTTS() {
+  if (!('speechSynthesis' in window)) {
+    alert('Your browser does not support text-to-speech. Try Chrome or Edge.');
+    return;
+  }
+  if (ttsSpeaking) {
+    pauseTTS();
+    return;
+  }
+  if (window.speechSynthesis.paused) {
+    window.speechSynthesis.resume();
+    setTTSState(true);
+    return;
+  }
+  startTTS();
+}
+
+function startTTS() {
+  window.speechSynthesis.cancel();
+  const text = buildTTSText();
+  if (!text) return;
+
+  ttsUtterance = new SpeechSynthesisUtterance(text);
+  ttsUtterance.rate = 0.95;
+  ttsUtterance.pitch = 1;
+  ttsUtterance.lang = 'en-US';
+
+  ttsUtterance.onstart = () => setTTSState(true);
+  ttsUtterance.onend = () => setTTSState(false);
+  ttsUtterance.onerror = () => setTTSState(false);
+
+  window.speechSynthesis.speak(ttsUtterance);
+}
+
+function pauseTTS() {
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.pause();
+    setTTSState(false, true);
+  }
+}
+
+function stopTTS() {
+  window.speechSynthesis.cancel();
+  setTTSState(false);
+}
+
+function setTTSState(playing, paused) {
+  ttsSpeaking = playing;
+  const btn = document.getElementById('tts-btn');
+  const controls = document.getElementById('tts-controls');
+  const status = document.getElementById('tts-status');
+  if (!btn) return;
+
+  if (playing) {
+    btn.querySelector('.tts-icon').textContent = '⏸';
+    btn.querySelector('.tts-label').textContent = 'Pause';
+    controls && controls.classList.remove('hidden');
+    status && (status.textContent = 'Reading…');
+  } else if (paused) {
+    btn.querySelector('.tts-icon').textContent = '▶';
+    btn.querySelector('.tts-label').textContent = 'Resume';
+    status && (status.textContent = 'Paused');
+  } else {
+    btn.querySelector('.tts-icon').textContent = '▶';
+    btn.querySelector('.tts-label').textContent = 'Listen';
+    controls && controls.classList.add('hidden');
+  }
+}
+
+// Stop TTS when navigating away
+window.addEventListener('beforeunload', () => window.speechSynthesis && window.speechSynthesis.cancel());
+
 // ── Card expand/collapse ──────────────────────────────────────────────────────
 
 function toggleCard(headerBtn) {
