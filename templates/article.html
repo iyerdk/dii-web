@@ -43,7 +43,7 @@
     {% endif %}
 
     <div class="article-body">
-      {{ article.body_md | markdown }}
+      {{ article.body_md | markdown | safe }}
     </div>
 
     {% if article.sources %}

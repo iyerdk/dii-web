@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Optional
 
 import markdown as md
-from jinja2 import Markup
+from markupsafe import Markup
 import resend
 from fastapi import Depends, FastAPI, HTTPException, Request, Header
 from fastapi.responses import HTMLResponse, JSONResponse
