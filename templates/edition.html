@@ -1,9 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Digital Infrastructure Insider — Latest Edition{% endblock %}
+{% block title %}Edition {{ edition.num }} — Digital Infrastructure Insider{% endblock %}
 
 {% block content %}
 
-{% if edition %}
 <div class="beat-filter" role="navigation" aria-label="Filter by beat">
   <div class="container">
     <div class="beat-filter-inner">
@@ -14,10 +13,8 @@
     </div>
   </div>
 </div>
-{% endif %}
 
 <main class="container">
-  {% if edition %}
   <div class="edition-header">
     <div class="edition-label">Edition {{ edition.num }}</div>
     <div class="edition-date">{{ edition.date }}</div>
@@ -47,18 +44,11 @@
     </article>
     {% endfor %}
   </div>
-
-  {% else %}
-  <div class="empty-state">
-    <p>No editions published yet.</p>
-  </div>
-  {% endif %}
 </main>
 
 {% endblock %}
 
 {% block scripts %}
-{% if edition %}
 <script>
   const chips = document.querySelectorAll('.beat-chip');
   const cards = document.querySelectorAll('.article-card');
@@ -79,5 +69,4 @@
     });
   });
 </script>
-{% endif %}
 {% endblock %}

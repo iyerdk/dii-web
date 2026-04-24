@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 """
-Digital Infrastructure Insider — Weekly Research Web App
+Digital Infrastructure Insider — Web Publishing Platform
 FastAPI + Jinja2 + SQLite, deployable on Railway
 """
 
 import json
 import os
-import secrets
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
-import anthropic
+import markdown as md
 import resend
 from fastapi import Depends, FastAPI, HTTPException, Request, Header
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -25,44 +24,53 @@ from pydantic import BaseModel
 
 DB_PATH = os.environ.get("DB_PATH", "dii.db")
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "change-me-in-production")
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
-EMAIL_TO = os.environ.get("EMAIL_TO", "")           # recipient address
+EMAIL_TO = os.environ.get("EMAIL_TO", "")
 EMAIL_FROM = os.environ.get("EMAIL_FROM", "DII Briefing <briefing@dii.news>")
 
 app = FastAPI(title="Digital Infrastructure Insider")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
-templates.env.filters["from_json"] = json.loads
+templates.env.filters["markdown"] = lambda text: md.markdown(
+    text or "", extensions=["nl2br", "sane_lists"]
+)
+
+BEATS = [
+    "Data Infrastructure",
+    "European Telecom",
+    "Connectivity",
+    "Energy & Power",
+    "Capital & Deals",
+    "Geopolitics",
+]
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.executescript("""
-            CREATE TABLE IF NOT EXISTS episodes (
+            CREATE TABLE IF NOT EXISTS editions (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                slug        TEXT UNIQUE NOT NULL,
-                episode_num INTEGER NOT NULL,
-                title       TEXT NOT NULL,
-                subtitle    TEXT,
+                num         INTEGER UNIQUE NOT NULL,
                 date        TEXT NOT NULL,
-                summary     TEXT,
-                content_md  TEXT,
-                shownotes   TEXT,       -- JSON blob
-                mp3_url     TEXT,
                 published   INTEGER DEFAULT 1,
                 created_at  TEXT DEFAULT (datetime('now'))
             );
 
-            CREATE TABLE IF NOT EXISTS research_context (
+            CREATE TABLE IF NOT EXISTS articles (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                episode_id  INTEGER NOT NULL,
-                topic       TEXT NOT NULL,
-                content     TEXT NOT NULL,
-                bullets     TEXT,       -- newline-separated bullet points
-                sources     TEXT,       -- JSON array of URLs
-                FOREIGN KEY (episode_id) REFERENCES episodes(id)
+                edition_id  INTEGER NOT NULL,
+                slug        TEXT UNIQUE NOT NULL,
+                beat        TEXT NOT NULL,
+                title       TEXT NOT NULL,
+                subtitle    TEXT,
+                body_md     TEXT NOT NULL,
+                summary     TEXT,
+                bullets     TEXT,   -- JSON array of strings
+                sources     TEXT,   -- JSON array of {title, url}
+                thread_tags TEXT,   -- JSON array of thread IDs
+                created_at  TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (edition_id) REFERENCES editions(id)
             );
         """)
 
@@ -78,25 +86,41 @@ def get_db():
 
 init_db()
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def slugify(text: str) -> str:
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = re.sub(r"[\s_-]+", "-", text)
+    return re.sub(r"^-+|-+$", "", text)
+
+def row_to_dict(row) -> dict:
+    d = dict(row)
+    for field in ("bullets", "sources", "thread_tags"):
+        if field in d and d[field]:
+            d[field] = json.loads(d[field])
+        else:
+            d[field] = [] if field != "sources" else []
+    return d
+
 # ── Models ────────────────────────────────────────────────────────────────────
 
-class PublishPayload(BaseModel):
-    episode_num: int
+class ArticlePayload(BaseModel):
+    beat: str
     title: str
     subtitle: Optional[str] = None
-    date: str                       # YYYY-MM-DD
+    body_md: str
     summary: Optional[str] = None
-    content_md: str                 # full two-speaker markdown script
-    shownotes: Optional[dict] = None
-    mp3_url: Optional[str] = None
-    research_topics: Optional[list[dict]] = None  # [{topic, content, sources}]
+    bullets: Optional[list[str]] = None
+    sources: Optional[list[dict]] = None   # [{title, url}]
+    thread_tags: Optional[list[str]] = None
 
-class ChatRequest(BaseModel):
-    episode_slug: str
-    section_context: str            # text of the section being asked about
-    question: str
+class PublishPayload(BaseModel):
+    edition_num: int
+    date: str                              # YYYY-MM-DD
+    articles: list[ArticlePayload]
 
-# ── Auth helper ───────────────────────────────────────────────────────────────
+# ── Auth ──────────────────────────────────────────────────────────────────────
 
 def verify_webhook(x_webhook_secret: str = Header(None)):
     if x_webhook_secret != WEBHOOK_SECRET:
@@ -107,141 +131,152 @@ def verify_webhook(x_webhook_secret: str = Header(None)):
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     with get_db() as db:
-        episodes = db.execute(
-            "SELECT * FROM episodes WHERE published=1 ORDER BY episode_num DESC LIMIT 20"
-        ).fetchall()
-        latest = episodes[0] if episodes else None
-        shownotes = json.loads(latest["shownotes"]) if latest and latest["shownotes"] else {}
-    return templates.TemplateResponse(request, "index.html", {
-        "latest": latest,
-        "shownotes": shownotes,
-        "archive": episodes[1:] if episodes else [],
-    })
-
-
-@app.get("/episode/{slug}", response_class=HTMLResponse)
-async def episode(request: Request, slug: str):
-    with get_db() as db:
-        ep = db.execute(
-            "SELECT * FROM episodes WHERE slug=? AND published=1", (slug,)
+        edition = db.execute(
+            "SELECT * FROM editions WHERE published=1 ORDER BY num DESC LIMIT 1"
         ).fetchone()
-        if not ep:
-            raise HTTPException(status_code=404, detail="Episode not found")
-        topics = db.execute(
-            "SELECT * FROM research_context WHERE episode_id=?", (ep["id"],)
-        ).fetchall()
-        shownotes = json.loads(ep["shownotes"]) if ep["shownotes"] else {}
-        archive = db.execute(
-            "SELECT slug, title, date FROM episodes WHERE published=1 ORDER BY date DESC LIMIT 20"
-        ).fetchall()
-    return templates.TemplateResponse(request, "episode.html", {
-        "ep": ep,
-        "shownotes": shownotes,
-        "topics": topics,
-        "archive": archive,
+        if not edition:
+            return templates.TemplateResponse(request, "index.html", {
+                "edition": None, "articles": [], "beats": BEATS,
+            })
+        articles = [
+            row_to_dict(r) for r in db.execute(
+                "SELECT * FROM articles WHERE edition_id=? ORDER BY id",
+                (edition["id"],)
+            ).fetchall()
+        ]
+    return templates.TemplateResponse(request, "index.html", {
+        "edition": dict(edition),
+        "articles": articles,
+        "beats": BEATS,
     })
 
+
+@app.get("/edition/{num}", response_class=HTMLResponse)
+async def edition_page(request: Request, num: int):
+    with get_db() as db:
+        edition = db.execute(
+            "SELECT * FROM editions WHERE num=? AND published=1", (num,)
+        ).fetchone()
+        if not edition:
+            raise HTTPException(status_code=404, detail="Edition not found")
+        articles = [
+            row_to_dict(r) for r in db.execute(
+                "SELECT * FROM articles WHERE edition_id=? ORDER BY id",
+                (edition["id"],)
+            ).fetchall()
+        ]
+        archive = db.execute(
+            "SELECT num, date FROM editions WHERE published=1 ORDER BY num DESC"
+        ).fetchall()
+    return templates.TemplateResponse(request, "edition.html", {
+        "edition": dict(edition),
+        "articles": articles,
+        "beats": BEATS,
+        "archive": [dict(r) for r in archive],
+    })
+
+
+@app.get("/article/{slug}", response_class=HTMLResponse)
+async def article_page(request: Request, slug: str):
+    with get_db() as db:
+        article = db.execute(
+            "SELECT a.*, e.num as edition_num, e.date as edition_date "
+            "FROM articles a JOIN editions e ON a.edition_id=e.id WHERE a.slug=?",
+            (slug,)
+        ).fetchone()
+        if not article:
+            raise HTTPException(status_code=404, detail="Article not found")
+        # Sibling articles in same edition for next/prev nav
+        siblings = db.execute(
+            "SELECT slug, title, beat FROM articles WHERE edition_id=? ORDER BY id",
+            (article["edition_id"],)
+        ).fetchall()
+    art = row_to_dict(article)
+    sibling_list = [dict(s) for s in siblings]
+    idx = next((i for i, s in enumerate(sibling_list) if s["slug"] == slug), 0)
+    return templates.TemplateResponse(request, "article.html", {
+        "article": art,
+        "prev_article": sibling_list[idx - 1] if idx > 0 else None,
+        "next_article": sibling_list[idx + 1] if idx < len(sibling_list) - 1 else None,
+    })
+
+
+@app.get("/archive", response_class=HTMLResponse)
+async def archive(request: Request):
+    with get_db() as db:
+        editions = db.execute(
+            "SELECT e.*, COUNT(a.id) as article_count "
+            "FROM editions e LEFT JOIN articles a ON e.id=a.edition_id "
+            "WHERE e.published=1 GROUP BY e.id ORDER BY e.num DESC"
+        ).fetchall()
+    return templates.TemplateResponse(request, "archive.html", {
+        "editions": [dict(e) for e in editions],
+    })
+
+
+# ── Webhooks ──────────────────────────────────────────────────────────────────
 
 @app.post("/webhook/publish")
-async def publish_episode(payload: PublishPayload, _=Depends(verify_webhook)):
-    slug = f"ep{payload.episode_num}-{payload.date}"
-
+async def publish_edition(payload: PublishPayload, _=Depends(verify_webhook)):
     with get_db() as db:
-        existing = db.execute("SELECT id FROM episodes WHERE slug=?", (slug,)).fetchone()
-        if existing:
-            db.execute("""
-                UPDATE episodes SET title=?, subtitle=?, summary=?, content_md=?,
-                shownotes=?, mp3_url=? WHERE slug=?
-            """, (
-                payload.title, payload.subtitle, payload.summary,
-                payload.content_md, json.dumps(payload.shownotes or {}),
-                payload.mp3_url, slug
-            ))
-            ep_id = existing["id"]
-        else:
-            cur = db.execute("""
-                INSERT INTO episodes (slug, episode_num, title, subtitle, date, summary,
-                content_md, shownotes, mp3_url)
-                VALUES (?,?,?,?,?,?,?,?,?)
-            """, (
-                slug, payload.episode_num, payload.title, payload.subtitle,
-                payload.date, payload.summary, payload.content_md,
-                json.dumps(payload.shownotes or {}), payload.mp3_url
-            ))
-            ep_id = cur.lastrowid
-
-        if payload.research_topics:
-            db.execute("DELETE FROM research_context WHERE episode_id=?", (ep_id,))
-            for t in payload.research_topics:
-                bullets = t.get("bullets")
-                if isinstance(bullets, list):
-                    bullets = "\n".join(bullets)
-                db.execute(
-                    "INSERT INTO research_context (episode_id, topic, content, bullets, sources) VALUES (?,?,?,?,?)",
-                    (ep_id, t.get("topic"), t.get("content"), bullets, json.dumps(t.get("sources", [])))
-                )
-
-    return {"status": "published", "slug": slug, "url": f"/episode/{slug}"}
-
-
-@app.delete("/webhook/episode/{slug}")
-async def delete_episode(slug: str, _=Depends(verify_webhook)):
-    with get_db() as db:
-        ep = db.execute("SELECT id FROM episodes WHERE slug=?", (slug,)).fetchone()
-        if not ep:
-            raise HTTPException(status_code=404, detail="Episode not found")
-        db.execute("DELETE FROM research_context WHERE episode_id=?", (ep["id"],))
-        db.execute("DELETE FROM episodes WHERE slug=?", (slug,))
-    return {"status": "deleted", "slug": slug}
-
-
-@app.post("/api/chat")
-async def chat(req: ChatRequest):
-    if not ANTHROPIC_API_KEY:
-        raise HTTPException(status_code=503, detail="AI chat not configured")
-
-    with get_db() as db:
-        ep = db.execute(
-            "SELECT title, date, summary FROM episodes WHERE slug=?", (req.episode_slug,)
+        existing = db.execute(
+            "SELECT id FROM editions WHERE num=?", (payload.edition_num,)
         ).fetchone()
-        if not ep:
-            raise HTTPException(status_code=404, detail="Episode not found")
-        topics = db.execute(
-            "SELECT topic, content FROM research_context WHERE episode_id="
-            "(SELECT id FROM episodes WHERE slug=?)", (req.episode_slug,)
-        ).fetchall()
 
-    research_context = "\n\n".join(
-        f"## {t['topic']}\n{t['content']}" for t in topics
-    ) if topics else ""
+        if existing:
+            edition_id = existing["id"]
+            db.execute(
+                "UPDATE editions SET date=? WHERE id=?",
+                (payload.date, edition_id)
+            )
+            db.execute("DELETE FROM articles WHERE edition_id=?", (edition_id,))
+        else:
+            cur = db.execute(
+                "INSERT INTO editions (num, date) VALUES (?,?)",
+                (payload.edition_num, payload.date)
+            )
+            edition_id = cur.lastrowid
 
-    system = f"""You are the research assistant for "Digital Infrastructure Insider",
-a weekly briefing on global digital infrastructure for executives and investors.
+        slugs = []
+        for art in payload.articles:
+            base_slug = f"ep{payload.edition_num}-{slugify(art.title)}"
+            slug = base_slug
+            counter = 2
+            while slug in slugs:
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            slugs.append(slug)
 
-Episode: {ep['title']} ({ep['date']})
-Summary: {ep['summary'] or ''}
+            db.execute("""
+                INSERT INTO articles
+                  (edition_id, slug, beat, title, subtitle, body_md,
+                   summary, bullets, sources, thread_tags)
+                VALUES (?,?,?,?,?,?,?,?,?,?)
+            """, (
+                edition_id, slug, art.beat, art.title, art.subtitle,
+                art.body_md, art.summary,
+                json.dumps(art.bullets or []),
+                json.dumps(art.sources or []),
+                json.dumps(art.thread_tags or []),
+            ))
 
-The user is reading this section of the episode:
----
-{req.section_context}
----
+    return {
+        "status": "published",
+        "edition_num": payload.edition_num,
+        "article_count": len(payload.articles),
+        "url": f"/edition/{payload.edition_num}",
+    }
 
-Full research context for this week:
----
-{research_context}
----
 
-Answer the user's question using the research above. Be concise and direct.
-If the question goes beyond the week's research, say so and share what you do know."""
-
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=600,
-        system=system,
-        messages=[{"role": "user", "content": req.question}],
-    )
-    return {"answer": response.content[0].text}
+@app.delete("/webhook/edition/{num}")
+async def delete_edition(num: int, _=Depends(verify_webhook)):
+    with get_db() as db:
+        edition = db.execute("SELECT id FROM editions WHERE num=?", (num,)).fetchone()
+        if not edition:
+            raise HTTPException(status_code=404, detail="Edition not found")
+        db.execute("DELETE FROM articles WHERE edition_id=?", (edition["id"],))
+        db.execute("DELETE FROM editions WHERE num=?", (num,))
+    return {"status": "deleted", "edition_num": num}
 
 
 @app.post("/webhook/send-email")
@@ -251,37 +286,23 @@ async def send_email(_=Depends(verify_webhook)):
     if not EMAIL_TO:
         raise HTTPException(status_code=503, detail="EMAIL_TO not configured")
 
-    # Fetch the latest published episode with its research topics
     with get_db() as db:
-        ep = db.execute(
-            "SELECT * FROM episodes WHERE published=1 ORDER BY episode_num DESC LIMIT 1"
+        edition = db.execute(
+            "SELECT * FROM editions WHERE published=1 ORDER BY num DESC LIMIT 1"
         ).fetchone()
-        if not ep:
-            raise HTTPException(status_code=404, detail="No published episodes")
-        topics = db.execute(
-            "SELECT * FROM research_context WHERE episode_id=?", (ep["id"],)
-        ).fetchall()
-        shownotes = json.loads(ep["shownotes"]) if ep["shownotes"] else {}
+        if not edition:
+            raise HTTPException(status_code=404, detail="No published editions")
+        articles = [
+            row_to_dict(r) for r in db.execute(
+                "SELECT * FROM articles WHERE edition_id=? ORDER BY id",
+                (edition["id"],)
+            ).fetchall()
+        ]
 
-    # Build topic dicts for template
-    topic_list = []
-    for t in topics:
-        bullets = (t["bullets"] or "").strip().split("\n")
-        bullets = [b.strip().lstrip("•-").strip() for b in bullets if b.strip()]
-        sources = json.loads(t["sources"] or "[]")
-        topic_list.append({
-            "topic": t["topic"],
-            "bullets": bullets,
-            "content": t["content"] or "",
-            "sources": sources,
-        })
-
-    web_url = f"https://agile-hope-production.up.railway.app/episode/{ep['slug']}"
-
+    web_url = f"https://agile-hope-production.up.railway.app/edition/{edition['num']}"
     html = templates.get_template("email_briefing.html").render(
-        ep=ep,
-        shownotes=shownotes,
-        topics=topic_list,
+        edition=dict(edition),
+        articles=articles,
         web_url=web_url,
     )
 
@@ -289,11 +310,11 @@ async def send_email(_=Depends(verify_webhook)):
     result = resend.Emails.send({
         "from": EMAIL_FROM,
         "to": [EMAIL_TO],
-        "subject": f"DII Briefing — EP{ep['episode_num']}: {ep['title']}",
+        "subject": f"DII Edition {edition['num']} — {edition['date']}",
         "html": html,
     })
 
-    return {"status": "sent", "email_id": result.get("id"), "episode": ep["slug"]}
+    return {"status": "sent", "email_id": result.get("id"), "edition_num": edition["num"]}
 
 
 @app.get("/health")

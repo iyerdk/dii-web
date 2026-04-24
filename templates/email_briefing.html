@@ -3,9 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DII Briefing — {{ ep.title }}</title>
+<title>DII Edition {{ edition.num }} — {{ edition.date }}</title>
 <style>
-  /* ── Reset ── */
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     background: #ffffff;
@@ -15,22 +14,16 @@
     line-height: 1.65;
     -webkit-text-size-adjust: 100%;
   }
+  .wrapper { max-width: 640px; margin: 0 auto; padding: 0 16px; }
 
-  /* ── Wrapper ── */
-  .wrapper {
-    max-width: 680px;
-    margin: 0 auto;
-    padding: 0 16px;
-  }
-
-  /* ── Masthead ── */
+  /* Masthead */
   .masthead {
     border-top: 4px solid #111;
     border-bottom: 1px solid #111;
     padding: 14px 0 12px;
-    margin-bottom: 6px;
+    margin-bottom: 20px;
   }
-  .masthead-top {
+  .masthead-row {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
@@ -44,125 +37,52 @@
     text-transform: uppercase;
     color: #111;
   }
-  .pub-meta {
-    font-size: 11px;
-    color: #555;
-    font-style: italic;
-  }
-  .ep-label {
+  .pub-meta { font-size: 11px; color: #555; font-style: italic; }
+  .edition-label {
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: #555;
+  }
+
+  /* Article */
+  .article { margin-bottom: 28px; border-bottom: 1px solid #e0e0e0; padding-bottom: 24px; }
+  .article:last-child { border-bottom: none; }
+
+  .beat-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #c0392b;
+    margin-bottom: 6px;
+    display: block;
+  }
+  h2.article-title {
+    font-family: Georgia, serif;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.22;
+    color: #111;
     margin-bottom: 6px;
   }
-
-  /* ── Headline block ── */
-  .headline-block {
-    border-bottom: 1px solid #ccc;
-    padding-bottom: 16px;
-    margin-bottom: 16px;
-  }
-  h1.headline {
-    font-family: Georgia, serif;
-    font-size: 28px;
-    font-weight: 700;
-    line-height: 1.18;
-    letter-spacing: -0.01em;
-    color: #111;
-    margin-bottom: 8px;
-  }
-  p.deck {
-    font-size: 15px;
-    color: #333;
-    line-height: 1.5;
+  p.article-subtitle {
+    font-size: 14px;
+    color: #444;
     font-style: italic;
+    line-height: 1.5;
     margin-bottom: 10px;
   }
-  .lede {
-    font-size: 15px;
+  p.article-summary {
+    font-size: 14px;
     line-height: 1.7;
-    color: #111;
-    margin-bottom: 0;
-  }
-
-  /* ── Takeaways box ── */
-  .takeaways-box {
-    border: 1px solid #ccc;
-    border-left: 4px solid #111;
-    padding: 12px 16px;
-    margin-bottom: 20px;
-    background: #f9f9f9;
-  }
-  .box-label {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: #444;
-    margin-bottom: 8px;
-    display: block;
-  }
-  .takeaways-box ul {
-    list-style: none;
-    padding: 0;
-  }
-  .takeaways-box li {
-    font-size: 13px;
-    line-height: 1.55;
     color: #222;
-    padding-left: 14px;
-    position: relative;
-    margin-bottom: 5px;
-  }
-  .takeaways-box li::before {
-    content: "›";
-    position: absolute;
-    left: 0;
-    color: #111;
-    font-weight: 700;
+    margin-bottom: 10px;
   }
 
-  /* ── Section divider ── */
-  .section-rule {
-    border: none;
-    border-top: 1px solid #ccc;
-    margin: 20px 0 16px;
-  }
-
-  /* ── Story card ── */
-  .story {
-    margin-bottom: 24px;
-    page-break-inside: avoid;
-  }
-  .story-label {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: #555;
-    margin-bottom: 5px;
-    display: block;
-  }
-  h2.story-headline {
-    font-family: Georgia, serif;
-    font-size: 19px;
-    font-weight: 700;
-    line-height: 1.25;
-    color: #111;
-    margin-bottom: 8px;
-  }
-
-  /* Bullet facts — tight, bold lead-in style */
-  .fact-list {
-    list-style: none;
-    padding: 0;
-    margin-bottom: 12px;
-    border-top: 1px solid #e8e8e8;
-    border-bottom: 1px solid #e8e8e8;
-    padding: 8px 0;
-  }
+  /* Bullets */
+  .fact-list { list-style: none; padding: 8px 0; margin-bottom: 12px; border-top: 1px solid #e8e8e8; border-bottom: 1px solid #e8e8e8; }
   .fact-list li {
     font-size: 13px;
     line-height: 1.5;
@@ -171,51 +91,21 @@
     position: relative;
     margin-bottom: 4px;
   }
-  .fact-list li::before {
-    content: "▸";
-    position: absolute;
-    left: 0;
-    color: #111;
-    font-size: 11px;
-    top: 2px;
-  }
+  .fact-list li::before { content: "→"; position: absolute; left: 0; color: #c0392b; font-size: 11px; }
 
-  /* Analysis paragraph */
-  .analysis {
-    font-size: 14px;
-    line-height: 1.75;
-    color: #222;
-    margin-bottom: 10px;
-  }
-
-  /* Sources */
-  .sources {
+  /* Read more */
+  .read-more-link {
+    display: inline-block;
     font-size: 11px;
-    color: #777;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #c0392b;
+    text-decoration: none;
     margin-top: 6px;
   }
-  .sources a {
-    color: #1a3a8a;
-    text-decoration: none;
-    word-break: break-all;
-  }
 
-  /* ── What to watch ── */
-  .watch-box {
-    background: #f4f4f4;
-    border-top: 2px solid #111;
-    padding: 14px 16px;
-    margin: 24px 0;
-  }
-  .watch-box .box-label { margin-bottom: 6px; }
-  .watch-box p {
-    font-size: 13.5px;
-    line-height: 1.6;
-    color: #222;
-    font-style: italic;
-  }
-
-  /* ── Footer ── */
+  /* Footer */
   .email-footer {
     border-top: 1px solid #ccc;
     padding: 16px 0 24px;
@@ -223,110 +113,53 @@
     color: #888;
     line-height: 1.6;
   }
-  .email-footer a { color: #1a3a8a; text-decoration: none; }
+  .email-footer a { color: #c0392b; text-decoration: none; }
   .web-link {
     display: inline-block;
     margin-bottom: 8px;
     font-size: 12px;
     font-weight: 700;
-    color: #1a3a8a;
+    color: #c0392b;
     text-decoration: none;
-    letter-spacing: 0.03em;
-  }
-
-  /* ── Print overrides ── */
-  @media print {
-    body { font-size: 10.5pt; }
-    h1.headline { font-size: 22pt; }
-    h2.story-headline { font-size: 14pt; }
-    .wrapper { max-width: 100%; padding: 0; }
-    .email-footer { display: none; }
   }
 </style>
 </head>
 <body>
 <div class="wrapper">
 
-  <!-- Masthead -->
   <div class="masthead">
-    <div class="masthead-top">
+    <div class="masthead-row">
       <span class="pub-name">Digital Infrastructure Insider</span>
-      <span class="pub-meta">{{ ep.date }}</span>
+      <span class="pub-meta">{{ edition.date }}</span>
     </div>
-    <div class="ep-label">Episode {{ ep.episode_num }} &nbsp;·&nbsp; Weekly Executive Briefing</div>
+    <div class="edition-label">Edition {{ edition.num }} &nbsp;·&nbsp; Weekly Executive Briefing</div>
   </div>
 
-  <!-- Headline block -->
-  <div class="headline-block">
-    <h1 class="headline">{{ ep.title }}</h1>
-    {% if ep.subtitle %}
-    <p class="deck">{{ ep.subtitle }}</p>
+  {% for article in articles %}
+  <div class="article">
+    <span class="beat-label">{{ article.beat }}</span>
+    <h2 class="article-title">{{ article.title }}</h2>
+    {% if article.subtitle %}
+    <p class="article-subtitle">{{ article.subtitle }}</p>
     {% endif %}
-    {% if ep.summary %}
-    <p class="lede">{{ ep.summary }}</p>
-    {% endif %}
-  </div>
-
-  <!-- Key Takeaways -->
-  {% if shownotes.get('takeaways') %}
-  <div class="takeaways-box">
-    <span class="box-label">This Week's Takeaways</span>
-    <ul>
-      {% for item in shownotes['takeaways'] %}
-      <li>{{ item }}</li>
-      {% endfor %}
-    </ul>
-  </div>
-  {% endif %}
-
-  <!-- Research sections -->
-  {% for topic in topics %}
-  {% if not loop.first %}<hr class="section-rule">{% endif %}
-  <div class="story">
-    <span class="story-label">Research &nbsp;{{ loop.index }} of {{ topics|length }}</span>
-    <h2 class="story-headline">{{ topic.topic }}</h2>
-
-    {% if topic.bullets %}
+    {% if article.bullets %}
     <ul class="fact-list">
-      {% for b in topic.bullets %}
-      <li>{{ b }}</li>
+      {% for bullet in article.bullets %}
+      <li>{{ bullet }}</li>
       {% endfor %}
     </ul>
     {% endif %}
-
-    {% if topic.content %}
-    <p class="analysis">{{ topic.content }}</p>
+    {% if article.summary %}
+    <p class="article-summary">{{ article.summary }}</p>
     {% endif %}
-
-    {% if topic.sources %}
-    <div class="sources">
-      Sources:
-      {% for url in topic.sources %}
-        <a href="{{ url }}">{{ url }}</a>{% if not loop.last %} &nbsp;·&nbsp; {% endif %}
-      {% endfor %}
-    </div>
-    {% endif %}
+    <a class="read-more-link" href="{{ web_url }}/article/{{ article.slug }}">Read full article →</a>
   </div>
   {% endfor %}
 
-  <!-- What to watch -->
-  {% if shownotes.get('chapters') %}
-  <div class="watch-box">
-    <span class="box-label">What to Watch</span>
-    <p>
-      {% set last_chapter = shownotes['chapters'][-1] %}
-      {{ last_chapter.get('description', '') }}
-    </p>
-  </div>
-  {% endif %}
-
-  <!-- Footer -->
   <div class="email-footer">
-    <a class="web-link" href="{{ web_url }}">Read full briefing &amp; interactive research →</a><br>
+    <a class="web-link" href="{{ web_url }}">Read full edition online →</a><br>
     Digital Infrastructure Insider is a weekly executive briefing on global digital infrastructure
-    for investors and operators. Produced by an AI research agent using public sources.
-    <br><br>
-    <a href="{{ web_url }}">View in browser</a>
+    for investors and operators.
   </div>
 
 </div>

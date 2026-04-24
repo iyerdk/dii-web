@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Archive — Digital Infrastructure Insider{% endblock %}
+
+{% block content %}
+<main class="container">
+  <div class="reading-width">
+
+    <div class="archive-header">
+      <h1 class="archive-title">Archive</h1>
+    </div>
+
+    {% if editions %}
+    <div class="archive-list">
+      {% for edition in editions %}
+      <div class="archive-item">
+        <div class="archive-num">E{{ edition.num }}</div>
+        <div class="archive-date">
+          <a href="/edition/{{ edition.num }}">{{ edition.date }}</a>
+        </div>
+        <div class="archive-count">{{ edition.article_count }} articles</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <p>No editions published yet.</p>
+    </div>
+    {% endif %}
+
+  </div>
+</main>
+{% endblock %}

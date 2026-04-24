@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ article.title }} — Digital Infrastructure Insider{% endblock %}
+{% block description %}{% if article.summary %}{{ article.summary }}{% endif %}{% endblock %}
+
+{% block content %}
+<main class="container">
+  <div class="reading-width">
+
+    <div style="padding-top: 1.5rem;">
+      <a class="article-back" href="/edition/{{ article.edition_num }}">← Edition {{ article.edition_num }}</a>
+    </div>
+
+    <header class="article-header">
+      <div class="article-beat">{{ article.beat }}</div>
+      <h1 class="article-title">{{ article.title }}</h1>
+      {% if article.subtitle %}
+      <p class="article-subtitle">{{ article.subtitle }}</p>
+      {% endif %}
+      <div class="article-meta">
+        <span>Edition {{ article.edition_num }}</span>
+        <span class="article-meta-sep">|</span>
+        <span>{{ article.edition_date }}</span>
+        {% if article.thread_tags %}
+        <span class="article-meta-sep">|</span>
+        <div class="thread-tags">
+          {% for tag in article.thread_tags %}
+          <span class="thread-tag">{{ tag }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </header>
+
+    {% if article.bullets %}
+    <div class="key-facts">
+      <div class="key-facts-label">Key facts</div>
+      <ul>
+        {% for bullet in article.bullets %}
+        <li>{{ bullet }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <div class="article-body">
+      {{ article.body_md | markdown }}
+    </div>
+
+    {% if article.sources %}
+    <div class="sources">
+      <div class="sources-label">Sources</div>
+      <ul>
+        {% for source in article.sources %}
+        <li>
+          {% if source.url %}
+          <a href="{{ source.url }}" target="_blank" rel="noopener">{{ source.title or source.url }}</a>
+          {% else %}
+          {{ source.title }}
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <nav class="article-nav" aria-label="Article navigation">
+      <div class="article-nav-prev">
+        {% if prev_article %}
+        <a href="/article/{{ prev_article.slug }}">
+          <div class="article-nav-label">← Previous</div>
+          <div class="article-nav-title">{{ prev_article.title }}</div>
+        </a>
+        {% endif %}
+      </div>
+      <div class="article-nav-next">
+        {% if next_article %}
+        <a href="/article/{{ next_article.slug }}">
+          <div class="article-nav-label">Next →</div>
+          <div class="article-nav-title">{{ next_article.title }}</div>
+        </a>
+        {% endif %}
+      </div>
+    </nav>
+
+  </div>
+</main>
+{% endblock %}
