@@ -1,87 +1,119 @@
 // ── Text-to-Speech (browser Web Speech API) ───────────────────────────────────
+// Chrome fix: speak sentence-by-sentence to avoid the ~15s silent cancellation bug.
+// Safari fix: wait for voiceschanged before first speak().
 
-let ttsUtterance = null;
+let ttsChunks = [];
+let ttsIndex = 0;
 let ttsSpeaking = false;
+let ttsPaused = false;
 
-function buildTTSText() {
-  // Extract the full script content, splitting MAYA/JAMES lines
+function buildTTSChunks() {
   const scriptEl = document.querySelector('.script-content');
-  if (!scriptEl) return '';
-  // Get text, preserving paragraph breaks
-  return scriptEl.innerText || scriptEl.textContent || '';
+  if (!scriptEl) return [];
+  let text = scriptEl.innerText || scriptEl.textContent || '';
+  // Strip markdown symbols so they aren't read aloud
+  text = text.replace(/#{1,3}\s*/g, '').replace(/\*\*/g, '').replace(/\*/g, '').trim();
+  // Split into sentences (~100 chars max per chunk to stay well under Chrome's limit)
+  return text.match(/[^.!?\n]+[.!?\n]+/g) || [text];
+}
+
+function getVoices() {
+  return new Promise(resolve => {
+    const v = window.speechSynthesis.getVoices();
+    if (v.length) { resolve(v); return; }
+    window.speechSynthesis.addEventListener('voiceschanged', () => {
+      resolve(window.speechSynthesis.getVoices());
+    }, { once: true });
+  });
 }
 
 function toggleTTS() {
   if (!('speechSynthesis' in window)) {
-    alert('Your browser does not support text-to-speech. Try Chrome or Edge.');
+    alert('Text-to-speech is not supported in this browser. Try Chrome or Edge.');
+    return;
+  }
+  if (ttsPaused) {
+    window.speechSynthesis.resume();
+    ttsPaused = false;
+    setTTSState('playing');
     return;
   }
   if (ttsSpeaking) {
-    pauseTTS();
+    window.speechSynthesis.pause();
+    ttsPaused = true;
+    setTTSState('paused');
     return;
   }
-  if (window.speechSynthesis.paused) {
-    window.speechSynthesis.resume();
-    setTTSState(true);
-    return;
-  }
+  setTTSState('loading');
   startTTS();
 }
 
-function startTTS() {
+async function startTTS() {
   window.speechSynthesis.cancel();
-  const text = buildTTSText();
-  if (!text) return;
-
-  ttsUtterance = new SpeechSynthesisUtterance(text);
-  ttsUtterance.rate = 0.95;
-  ttsUtterance.pitch = 1;
-  ttsUtterance.lang = 'en-US';
-
-  ttsUtterance.onstart = () => setTTSState(true);
-  ttsUtterance.onend = () => setTTSState(false);
-  ttsUtterance.onerror = () => setTTSState(false);
-
-  window.speechSynthesis.speak(ttsUtterance);
+  ttsChunks = buildTTSChunks();
+  ttsIndex = 0;
+  if (!ttsChunks.length) { setTTSState('stopped'); return; }
+  await getVoices();
+  ttsSpeaking = true;
+  ttsPaused = false;
+  speakNext();
 }
 
-function pauseTTS() {
-  if (window.speechSynthesis.speaking) {
-    window.speechSynthesis.pause();
-    setTTSState(false, true);
+function speakNext() {
+  if (!ttsSpeaking || ttsIndex >= ttsChunks.length) {
+    ttsSpeaking = false;
+    setTTSState('stopped');
+    return;
   }
+  const utt = new SpeechSynthesisUtterance(ttsChunks[ttsIndex]);
+  utt.rate = 0.92;
+  utt.lang = 'en-US';
+  utt.onstart = () => { if (ttsIndex === 0) setTTSState('playing'); };
+  utt.onend = () => { ttsIndex++; speakNext(); };
+  utt.onerror = (e) => {
+    if (e.error === 'interrupted' || e.error === 'canceled') return;
+    ttsSpeaking = false;
+    setTTSState('stopped');
+  };
+  window.speechSynthesis.speak(utt);
+  // Ensure visible state after first chunk fires
+  if (ttsIndex === 0) setTimeout(() => { if (ttsSpeaking) setTTSState('playing'); }, 300);
 }
 
 function stopTTS() {
+  ttsSpeaking = false;
+  ttsPaused = false;
   window.speechSynthesis.cancel();
-  setTTSState(false);
+  setTTSState('stopped');
 }
 
-function setTTSState(playing, paused) {
-  ttsSpeaking = playing;
+function setTTSState(state) {
   const btn = document.getElementById('tts-btn');
   const controls = document.getElementById('tts-controls');
   const status = document.getElementById('tts-status');
   if (!btn) return;
+  const icon = btn.querySelector('.tts-icon');
+  const label = btn.querySelector('.tts-label');
 
-  if (playing) {
-    btn.querySelector('.tts-icon').textContent = '⏸';
-    btn.querySelector('.tts-label').textContent = 'Pause';
+  if (state === 'playing') {
+    icon.textContent = '⏸'; label.textContent = 'Pause';
     controls && controls.classList.remove('hidden');
     status && (status.textContent = 'Reading…');
-  } else if (paused) {
-    btn.querySelector('.tts-icon').textContent = '▶';
-    btn.querySelector('.tts-label').textContent = 'Resume';
+  } else if (state === 'paused') {
+    icon.textContent = '▶'; label.textContent = 'Resume';
     status && (status.textContent = 'Paused');
+  } else if (state === 'loading') {
+    icon.textContent = '…'; label.textContent = 'Starting…';
+    controls && controls.classList.add('hidden');
   } else {
-    btn.querySelector('.tts-icon').textContent = '▶';
-    btn.querySelector('.tts-label').textContent = 'Listen';
+    icon.textContent = '▶'; label.textContent = 'Listen';
     controls && controls.classList.add('hidden');
   }
 }
 
-// Stop TTS when navigating away
-window.addEventListener('beforeunload', () => window.speechSynthesis && window.speechSynthesis.cancel());
+window.addEventListener('beforeunload', () => {
+  window.speechSynthesis && window.speechSynthesis.cancel();
+});
 
 // ── Card expand/collapse ──────────────────────────────────────────────────────
 
