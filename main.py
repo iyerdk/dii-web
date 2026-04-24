@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Optional
 
 import markdown as md
+from jinja2 import Markup
 import resend
 from fastapi import Depends, FastAPI, HTTPException, Request, Header
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -31,8 +32,8 @@ EMAIL_FROM = os.environ.get("EMAIL_FROM", "DII Briefing <briefing@dii.news>")
 app = FastAPI(title="Digital Infrastructure Insider")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
-templates.env.filters["markdown"] = lambda text: md.markdown(
-    text or "", extensions=["nl2br", "sane_lists"]
+templates.env.filters["markdown"] = lambda text: Markup(
+    md.markdown(text or "", extensions=["nl2br", "sane_lists"])
 )
 
 BEATS = [
