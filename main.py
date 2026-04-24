@@ -147,10 +147,11 @@ async def index(request: Request):
                 (edition["id"],)
             ).fetchall()
         ]
+    active_beats = [b for b in BEATS if any(a["beat"] == b for a in articles)]
     return templates.TemplateResponse(request, "index.html", {
         "edition": dict(edition),
         "articles": articles,
-        "beats": BEATS,
+        "beats": active_beats,
     })
 
 
@@ -171,10 +172,11 @@ async def edition_page(request: Request, num: int):
         archive = db.execute(
             "SELECT num, date FROM editions WHERE published=1 ORDER BY num DESC"
         ).fetchall()
+    active_beats = [b for b in BEATS if any(a["beat"] == b for a in articles)]
     return templates.TemplateResponse(request, "edition.html", {
         "edition": dict(edition),
         "articles": articles,
-        "beats": BEATS,
+        "beats": active_beats,
         "archive": [dict(r) for r in archive],
     })
 
