@@ -42,7 +42,9 @@ BEATS = [
     "Connectivity",
     "Energy & Power",
     "Capital & Deals",
-    "Geopolitics",
+    "Nordics",
+    "UK & Ireland",
+    "Western Europe",
 ]
 
 # ── Database ──────────────────────────────────────────────────────────────────
