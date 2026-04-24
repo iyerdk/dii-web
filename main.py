@@ -300,11 +300,13 @@ async def send_email(_=Depends(verify_webhook)):
             ).fetchall()
         ]
 
-    web_url = f"https://agile-hope-production.up.railway.app/edition/{edition['num']}"
+    base_url = "https://agile-hope-production.up.railway.app"
+    web_url = f"{base_url}/edition/{edition['num']}"
     html = templates.get_template("email_briefing.html").render(
         edition=dict(edition),
         articles=articles,
         web_url=web_url,
+        base_url=base_url,
     )
 
     resend.api_key = RESEND_API_KEY
