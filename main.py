@@ -36,16 +36,17 @@ templates.env.filters["markdown"] = lambda text: Markup(
     md.markdown(text or "", extensions=["nl2br", "sane_lists"])
 )
 
-BEATS = [
-    "Data Infrastructure",
-    "European Telecom",
-    "Connectivity",
-    "Energy & Power",
-    "Capital & Deals",
-    "Nordics",
-    "UK & Ireland",
-    "Western Europe",
-]
+BEAT_DEPTH_PATH = os.environ.get("BEAT_DEPTH_PATH", "beat_depth.json")
+
+def _load_beats() -> list[str]:
+    try:
+        with open(BEAT_DEPTH_PATH) as f:
+            data = json.load(f)
+        return [k for k in data if not k.startswith("_")]
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+BEATS = _load_beats()
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
@@ -265,11 +266,49 @@ async def publish_edition(payload: PublishPayload, _=Depends(verify_webhook)):
                 json.dumps(art.thread_tags or []),
             ))
 
+    email_result = None
+    email_error = None
+    if not RESEND_API_KEY or not EMAIL_TO:
+        email_error = "RESEND_API_KEY or EMAIL_TO not configured"
+    else:
+        with get_db() as db:
+            edition = db.execute(
+                "SELECT * FROM editions WHERE num=?", (payload.edition_num,)
+            ).fetchone()
+            articles_rows = [
+                row_to_dict(r) for r in db.execute(
+                    "SELECT * FROM articles WHERE edition_id=? ORDER BY id",
+                    (edition["id"],)
+                ).fetchall()
+            ]
+        base_url = "https://agile-hope-production.up.railway.app"
+        html = templates.get_template("email_briefing.html").render(
+            edition=dict(edition),
+            articles=articles_rows,
+            web_url=f"{base_url}/edition/{edition['num']}",
+            base_url=base_url,
+        )
+        resend.api_key = RESEND_API_KEY
+        try:
+            result = resend.Emails.send({
+                "from": EMAIL_FROM,
+                "to": [EMAIL_TO],
+                "subject": f"DII Edition {edition['num']} — {edition['date']}",
+                "html": html,
+            })
+            email_result = result.get("id")
+            if not email_result:
+                email_error = f"Resend returned no id: {result}"
+        except Exception as e:
+            email_error = str(e)
+
     return {
         "status": "published",
         "edition_num": payload.edition_num,
         "article_count": len(payload.articles),
         "url": f"/edition/{payload.edition_num}",
+        "email_id": email_result,
+        "email_error": email_error,
     }
 
 
@@ -314,14 +353,39 @@ async def send_email(_=Depends(verify_webhook)):
     )
 
     resend.api_key = RESEND_API_KEY
+    try:
+        result = resend.Emails.send({
+            "from": EMAIL_FROM,
+            "to": [EMAIL_TO],
+            "subject": f"DII Edition {edition['num']} — {edition['date']}",
+            "html": html,
+        })
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Resend error: {e}")
+    email_id = result.get("id")
+    if not email_id:
+        raise HTTPException(status_code=502, detail=f"Resend returned no id: {result}")
+
+    return {"status": "sent", "email_id": email_id, "edition_num": edition["num"]}
+
+
+class NotifyPayload(BaseModel):
+    subject: str
+    message: str
+
+
+@app.post("/webhook/notify")
+async def notify(payload: NotifyPayload, _=Depends(verify_webhook)):
+    if not RESEND_API_KEY or not EMAIL_TO:
+        raise HTTPException(status_code=503, detail="Email not configured")
+    resend.api_key = RESEND_API_KEY
     result = resend.Emails.send({
         "from": EMAIL_FROM,
         "to": [EMAIL_TO],
-        "subject": f"DII Edition {edition['num']} — {edition['date']}",
-        "html": html,
+        "subject": payload.subject,
+        "html": f"<pre style='font-family:sans-serif'>{payload.message}</pre>",
     })
-
-    return {"status": "sent", "email_id": result.get("id"), "edition_num": edition["num"]}
+    return {"status": "sent", "email_id": result.get("id")}
 
 
 @app.get("/health")
