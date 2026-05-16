@@ -129,16 +129,6 @@ def parse_research(path: Path) -> dict:
 
 # ── API helpers ────────────────────────────────────────────────────────────────
 
-def _base_url() -> str:
-    return WEBHOOK_URL.split("/webhook/")[0]
-
-
-def get_next_edition_num() -> int:
-    url = f"{_base_url()}/api/next-edition-num"
-    with urllib.request.urlopen(url, timeout=10) as r:
-        return json.loads(r.read())["next_edition_num"]
-
-
 def post_webhook(payload: dict) -> dict:
     body = json.dumps(payload).encode()
     req = urllib.request.Request(
@@ -167,12 +157,6 @@ def main() -> None:
     print(f"Parsing: {path}")
     parsed = parse_research(path)
     edition_num = parsed["edition_num"]
-
-    # Idempotency: skip if already published
-    next_num = get_next_edition_num()
-    if next_num > edition_num:
-        print(f"Edition {edition_num} already published (next expected: {next_num}) — skipping")
-        sys.exit(0)
 
     payload = {
         "edition_num": edition_num,
