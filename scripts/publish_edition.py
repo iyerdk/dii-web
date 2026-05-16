@@ -23,8 +23,12 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
-WEBHOOK_URL = os.environ.get("DII_WEBHOOK_URL", "").strip().strip("<>")
-WEBHOOK_SECRET = os.environ.get("DII_WEBHOOK_SECRET", "").strip().strip("<>")
+def _clean(val: str) -> str:
+    """Strip whitespace and any surrounding angle brackets or quotes."""
+    return re.sub(r'^[\s<\'"]+|[\s>\'"]+$', '', val)
+
+WEBHOOK_URL = _clean(os.environ.get("DII_WEBHOOK_URL", ""))
+WEBHOOK_SECRET = _clean(os.environ.get("DII_WEBHOOK_SECRET", ""))
 
 
 # ── File resolution ────────────────────────────────────────────────────────────
