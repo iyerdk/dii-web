@@ -1,0 +1,44 @@
+name: Publish Edition
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "research/20**.md"   # fires whenever a weekly research file is committed
+  schedule:
+    - cron: "0 7 * * 1"     # Monday 07:00 UTC — safety net if push trigger missed
+  workflow_dispatch:         # manual trigger from GitHub UI
+    inputs:
+      research_file:
+        description: "Research file path (e.g. research/2026-20.md). Leave blank for current week."
+        required: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve research file (push trigger)
+        if: github.event_name == 'push'
+        id: pushed_file
+        run: |
+          file=$(git diff-tree --no-commit-id -r --name-only "${{ github.sha }}" \
+            | grep -E 'research/20[0-9]{2}-[0-9]{2}\.md' | head -1)
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+
+      - name: Publish edition
+        env:
+          DII_WEBHOOK_URL: ${{ secrets.DII_WEBHOOK_URL }}
+          DII_WEBHOOK_SECRET: ${{ secrets.DII_WEBHOOK_SECRET }}
+        run: |
+          FILE="${{ steps.pushed_file.outputs.file || inputs.research_file }}"
+          if [ -n "$FILE" ]; then
+            python scripts/publish_edition.py "$FILE"
+          else
+            python scripts/publish_edition.py
+          fi
