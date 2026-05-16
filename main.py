@@ -388,6 +388,14 @@ async def notify(payload: NotifyPayload, _=Depends(verify_webhook)):
     return {"status": "sent", "email_id": result.get("id")}
 
 
+@app.get("/api/next-edition-num")
+async def next_edition_num():
+    with get_db() as db:
+        row = db.execute("SELECT MAX(num) as max_num FROM editions").fetchone()
+        max_num = row["max_num"] or 0
+    return {"next_edition_num": max_num + 1}
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
