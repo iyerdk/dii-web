@@ -23,8 +23,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
-WEBHOOK_URL = os.environ.get("DII_WEBHOOK_URL", "")
-WEBHOOK_SECRET = os.environ.get("DII_WEBHOOK_SECRET", "")
+WEBHOOK_URL = os.environ.get("DII_WEBHOOK_URL", "").strip().strip("<>")
+WEBHOOK_SECRET = os.environ.get("DII_WEBHOOK_SECRET", "").strip().strip("<>")
 
 
 # ── File resolution ────────────────────────────────────────────────────────────
