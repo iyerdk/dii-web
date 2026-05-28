@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Parse a DII research markdown file and publish it via the webhook.
 
+If a pre-written articles JSON exists at research/YYYY-WW-articles.json (the
+Thursday publishing agent's output), it is used instead of re-parsing the .md.
+
 Usage:
     python scripts/publish_edition.py [path/to/research/YYYY-WW.md]
 
@@ -154,17 +157,24 @@ def main() -> None:
     if not path.exists():
         sys.exit(f"Research file not found: {path} — skipping")
 
-    print(f"Parsing: {path}")
-    parsed = parse_research(path)
-    edition_num = parsed["edition_num"]
+    # Use pre-written articles JSON if available (Thursday publishing agent output)
+    json_path = path.with_name(path.stem + "-articles.json")
+    if json_path.exists():
+        print(f"Using pre-written articles from {json_path}")
+        with open(json_path) as f:
+            payload = json.load(f)
+        edition_num = payload["edition_num"]
+    else:
+        print(f"Parsing: {path}")
+        parsed = parse_research(path)
+        edition_num = parsed["edition_num"]
+        payload = {
+            "edition_num": edition_num,
+            "date": parsed["date"],
+            "articles": parsed["articles"],
+        }
 
-    payload = {
-        "edition_num": edition_num,
-        "date": parsed["date"],
-        "articles": parsed["articles"],
-    }
-
-    print(f"Publishing edition {edition_num} ({len(parsed['articles'])} articles, date {parsed['date']})...")
+    print(f"Publishing edition {edition_num} ({len(payload['articles'])} articles, date {payload['date']})...")
     result = post_webhook(payload)
     print(f"Published: {result.get('url')} | email_id={result.get('email_id')}")
 
