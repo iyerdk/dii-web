@@ -1,11 +1,11 @@
 {
   "_comment": "Tracks the last edition number each beat appeared in. Updated by Thursday agent. Agent warns if a beat has not appeared in 3+ editions.",
-  "Data Infrastructure": 11,
-  "European Telecom": 11,
-  "Connectivity": 13,
-  "Energy & Power": 13,
+  "Data Infrastructure": 14,
+  "European Telecom": 14,
+  "Connectivity": 14,
+  "Energy & Power": 14,
   "Capital & Deals": 13,
   "Nordics": 13,
-  "UK & Ireland": 11,
-  "Western Europe": 13
+  "UK & Ireland": 14,
+  "Western Europe": 14
 }
